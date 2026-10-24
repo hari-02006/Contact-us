@@ -8,6 +8,7 @@ const app = express();
 const publicDirectory = path.join(path.dirname(fileURLToPath(import.meta.url)), "public");
 
 app.use(express.urlencoded({ extended: false, limit: "10kb" }));
+app.use(express.json({ limit: "10kb" }));
 app.use(express.static(publicDirectory, { index: false }));
 
 function escapeHtml(value) {
@@ -137,30 +138,53 @@ return `<!doctype html>
 }
 
 app.get("/", (request, response) => {
-response.sendFile(path.join(publicDirectory, "index.html"));
+  response.sendFile(path.join(publicDirectory, "index.html"));
 });
 
 app.get("/history", (request, response) => {
-response.type("html").send(renderHistoryPage(getSubmissions()));
+  response.type("html").send(renderHistoryPage(getSubmissions()));
 });
 
 app.get("/api/contacts", (request, response) => {
-response.json({ submissions: getSubmissions() });
+  response.json({ submissions: getSubmissions() });
+});
+
+app.post("/api/contacts", (request, response) => {
+  const { values, errors } = validateContactForm(request.body);
+  if (request.body?.consent !== true) {
+    errors.consent = "Set consent to true to confirm you are using sample data and understand submissions are publicly visible.";
+  }
+
+  if (Object.keys(errors).length > 0) {
+    response.status(400).json({
+      success: false,
+      message: "Contact submission was not saved. Correct the errors and try again.",
+      errors
+    });
+    return;
+  }
+
+  const submission = addSubmission(values);
+  response.status(200).json({
+    success: true,
+    message: "Contact form submitted successfully.",
+    submission
+  });
 });
 
 app.post("/contact", (request, response) => {
-const { values, errors } = validateContactForm(request.body);
-const consentGiven = request.body?.consent === "on";
-if (!consentGiven) {
-  errors.consent = "Confirm that you are using sample data and understand submissions are publicly visible.";
-}
-if (Object.keys(errors).length > 0) {
-  response.status(400).send(renderResult({ values, errors, consentGiven }));
-  return;
-}
+  const { values, errors } = validateContactForm(request.body);
+  const consentGiven = request.body?.consent === "on";
+  if (!consentGiven) {
+    errors.consent = "Confirm that you are using sample data and understand submissions are publicly visible.";
+  }
+  if (Object.keys(errors).length > 0) {
+    response.status(400).send(renderResult({ values, errors, consentGiven }));
+    return;
+  }
 
-addSubmission(values);
-response.status(200).send(renderResult({ values, success: true, consentGiven }));
+  addSubmission(values);
+  response.status(200).send(renderResult({ values, success: true, consentGiven }));
 });
 
 app.use((request, response) => {

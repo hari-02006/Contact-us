@@ -37,6 +37,22 @@ describe("Contact Us form routes and validation", () => {
     return { response, html: await response.text() };
   }
 
+  async function submitJson(overrides = {}) {
+    const response = await fetch(`${baseUrl}/api/contacts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Jordan Sample",
+        email: "jordan@example.com",
+        phone: "9876543210",
+        message: "This is synthetic test data for the assignment.",
+        consent: true,
+        ...overrides
+      })
+    });
+    return { response, result: await response.json() };
+  }
+
   it("GET / serves the contact form", async () => {
     const response = await fetch(baseUrl);
     const html = await response.text();
@@ -159,5 +175,45 @@ describe("Contact Us form routes and validation", () => {
     const html = await historyResponse.text();
     assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
     assert.doesNotMatch(html, /<script>alert\(1\)<\/script>/);
+  });
+
+  it("accepts a valid JSON POST and returns the saved submission", async () => {
+    const { response, result } = await submitJson();
+    assert.equal(response.status, 200);
+    assert.equal(result.success, true);
+    assert.match(result.message, /submitted successfully/i);
+    assert.equal(result.submission.name, "Jordan Sample");
+    assert.equal(result.submission.email, "jordan@example.com");
+
+    const listResponse = await fetch(`${baseUrl}/api/contacts`);
+    const { submissions } = await listResponse.json();
+    assert.ok(submissions.some((submission) => submission.id === result.submission.id));
+  });
+
+  it("returns JSON field errors and does not save an invalid JSON POST", async () => {
+    const beforeResponse = await fetch(`${baseUrl}/api/contacts`);
+    const before = (await beforeResponse.json()).submissions.length;
+    const { response, result } = await submitJson({
+      name: "Jo",
+      email: "not-an-email",
+      phone: "123",
+      message: "Short"
+    });
+    assert.equal(response.status, 400);
+    assert.equal(result.success, false);
+    assert.match(result.errors.name, /at least 3 characters/);
+    assert.match(result.errors.email, /valid email/);
+    assert.match(result.errors.phone, /exactly 10 digits/);
+    assert.match(result.errors.message, /at least 10 characters/);
+
+    const afterResponse = await fetch(`${baseUrl}/api/contacts`);
+    const after = (await afterResponse.json()).submissions.length;
+    assert.equal(after, before);
+  });
+
+  it("requires explicit consent for JSON API submissions", async () => {
+    const { response, result } = await submitJson({ consent: false });
+    assert.equal(response.status, 400);
+    assert.match(result.errors.consent, /Set consent to true/);
   });
 });

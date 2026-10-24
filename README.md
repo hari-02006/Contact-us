@@ -35,6 +35,7 @@ On an invalid submission the server returns **400 Bad Request**, shows a field-s
 - `POST /contact` validates the form and adds valid submissions to the in-memory list.
 - `GET /history` displays the saved submissions as an HTML page.
 - `GET /api/contacts` returns the submissions as JSON, in the shape `{ "submissions": [...] }`.
+- `POST /api/contacts` accepts a JSON request body, independently validates each field, and returns a JSON success response or a `400` response with field errors. Include `"consent": true` to acknowledge that this public demo displays submissions.
 
 This is only an assignment/demo storage approach. Anyone who can access the app can read every entry on `/history` and `/api/contacts`. **Do not submit real contact details.** The list is held in the Node.js process memory, not a JSON file or database, so it is cleared whenever the server restarts and is not shared between multiple server instances. Use private database storage and access controls for a real contact form.
 
@@ -62,7 +63,55 @@ The automated tests start the Express server and exercise the actual HTTP routes
 
 ## Try the routes manually
 
-The browser form uses `GET /` to display the page and `POST /contact` to submit it. You can also test the server without the browser:
+The browser form uses `GET /` to display the page and `POST /contact` to submit it. The JSON API can be tested from PowerShell, like the terminal examples in the assignment screenshots. Start the app with `npm start` first.
+
+Read all saved submissions:
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3000/api/contacts" -Method Get | ConvertTo-Json -Depth 5
+```
+
+Add a valid synthetic submission:
+
+```powershell
+$body = @{
+  name = "Jordan Sample"
+  email = "jordan@example.com"
+  phone = "9876543210"
+  message = "This is synthetic test data for the assignment."
+  consent = $true
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Uri "http://localhost:3000/api/contacts" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body $body | ConvertTo-Json -Depth 5
+```
+
+Try invalid data and print the server's JSON validation errors:
+
+```powershell
+$badBody = @{
+  name = "Jo"
+  email = "not-an-email"
+  phone = "123"
+  message = "Short"
+  consent = $true
+} | ConvertTo-Json
+
+try {
+  Invoke-RestMethod `
+    -Uri "http://localhost:3000/api/contacts" `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body $badBody
+} catch {
+  $_.ErrorDetails.Message | ConvertFrom-Json | ConvertTo-Json -Depth 5
+}
+```
+
+The invalid request returns HTTP **400** and the response lists the validation error for each incorrect field. Invalid requests are never saved. You can still test the HTML form using `POST /contact`:
 
 ```sh
 curl -i http://localhost:3000/
