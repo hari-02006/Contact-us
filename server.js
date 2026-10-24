@@ -2,6 +2,7 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateContactForm } from "./validation.js";
+import { addSubmission, getSubmissions } from "./submissions.js";
 
 const app = express();
 const publicDirectory = path.join(path.dirname(fileURLToPath(import.meta.url)), "public");
@@ -19,7 +20,7 @@ function escapeHtml(value) {
   })[character]);
 }
 
-function renderResult({ values, errors = {}, success = false }) {
+function renderResult({ values, errors = {}, success = false, consentGiven = false }) {
   const heading = success ? "Message sent" : "Please check your details";
   const notice = success
     ? "Thanks for reaching out! Your contact form was submitted successfully."
@@ -67,13 +68,14 @@ function renderResult({ values, errors = {}, success = false }) {
 </head>
 <body>
   <main class="page">
-    <header class="topbar"><a class="brand" href="/">KINSHIP<span>.</span></a><span class="topbar-note">HERE WHEN YOU NEED US</span></header>
+    <header class="topbar"><a class="brand" href="/">KINSHIP<span>.</span></a><div class="topbar-actions"><span class="topbar-note">HERE WHEN YOU NEED US</span><a class="history-link" href="/history">Submission history <span aria-hidden="true">↗</span></a></div></header>
     <section class="contact-layout" aria-labelledby="page-title">
       <div class="side-copy">
         <p class="eyebrow">LET'S START A CONVERSATION</p>
         <h1 id="page-title">Good things<br>start with<br><span>a hello.</span></h1>
         <p class="side-intro">Questions, ideas, or just want to say hi? Send us a note and our team will be glad to hear from you.</p>
         <div class="contact-note"><span class="note-icon" aria-hidden="true">↗</span><span>We typically reply within<br><strong>one business day.</strong></span></div>
+        <p class="demo-warning"><strong>Classroom demo:</strong> submissions appear on the public history page. Use sample data only. Entries are cleared when the server restarts.</p>
       </div>
       <div class="form-card">
         <div class="form-heading">
@@ -81,12 +83,17 @@ function renderResult({ values, errors = {}, success = false }) {
           <span class="required-note"><span aria-hidden="true">*</span> Required</span>
         </div>
         ${success ? `<div class="notice success" role="status"><span class="notice-icon" aria-hidden="true">✓</span><span>${notice}</span></div>` : `<div class="notice error" role="alert"><span class="notice-icon" aria-hidden="true">!</span><span>${notice}</span></div>`}
-        ${success ? '<a class="return-link" href="/">← Return to the contact form</a>' : ""}
+        ${success ? '<a class="return-link" href="/history">View saved submissions →</a>' : ""}
         <form action="/contact" method="post" novalidate>
           ${formFields}
+          <div class="consent-field">
+            <input id="consent" name="consent" type="checkbox" value="on" required ${consentGiven ? "checked" : ""} ${errors.consent ? 'aria-invalid="true" aria-describedby="consent-error"' : ""}>
+            <label for="consent">I understand this demo displays my submission on its public history page. I am using sample data only.</label>
+          </div>
+          ${errors.consent ? `<p class="field-error consent-error" id="consent-error">${escapeHtml(errors.consent)}</p>` : ""}
           <button class="button" type="submit">Send message <span aria-hidden="true">→</span></button>
         </form>
-        <p class="privacy-note"><span aria-hidden="true">◇</span> Your details are only used to respond to your message.</p>
+        <p class="privacy-note"><span aria-hidden="true">◇</span> This demo stores entries in server memory only; they are not kept after restart.</p>
       </div>
     </section>
     <footer class="footer"><span>MADE FOR MEANINGFUL CONVERSATIONS</span><span>CONTACT / 01</span></footer>
@@ -95,18 +102,65 @@ function renderResult({ values, errors = {}, success = false }) {
 </html>`;
 }
 
+function renderHistoryPage(submissions) {
+const list = submissions.length
+  ? submissions.map((submission) => `<article class="submission-card">
+      <div class="submission-heading"><h2>${escapeHtml(submission.name)}</h2><time datetime="${escapeHtml(submission.createdAt)}">${escapeHtml(new Date(submission.createdAt).toLocaleString())}</time></div>
+      <div class="submission-contact"><a href="mailto:${escapeHtml(submission.email)}">${escapeHtml(submission.email)}</a><span>${escapeHtml(submission.phone)}</span></div>
+      <p class="submission-message">${escapeHtml(submission.message)}</p>
+    </article>`).join("\n")
+  : '<div class="empty-state"><span class="empty-icon" aria-hidden="true">✳</span><h2>No submissions yet</h2><p>Validated form submissions will appear here.</p><a class="button history-button" href="/">Go to contact form <span aria-hidden="true">→</span></a></div>';
+
+return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f4f7f5">
+<title>Submission history | Contact Us</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main class="history-page">
+  <header class="topbar"><a class="brand" href="/">KINSHIP<span>.</span></a><a class="history-link" href="/">← Back to contact form</a></header>
+  <section class="history-content" aria-labelledby="history-title">
+    <p class="eyebrow">IN-MEMORY DEMO</p>
+    <h1 id="history-title">Submission history</h1>
+    <p class="history-intro">Showing ${submissions.length} validated ${submissions.length === 1 ? "submission" : "submissions"}. This public demo uses memory only; entries disappear when the server restarts.</p>
+    <div class="history-warning" role="note"><strong>For classroom demonstration only.</strong> Do not enter real contact information. Anyone who can access this page or <code>/api/contacts</code> can read these sample submissions.</div>
+    <div class="submission-list">${list}</div>
+  </section>
+  <footer class="footer"><span>MADE FOR MEANINGFUL CONVERSATIONS</span><span><a href="/api/contacts">VIEW JSON API</a></span></footer>
+</main>
+</body>
+</html>`;
+}
+
 app.get("/", (request, response) => {
-  response.sendFile(path.join(publicDirectory, "index.html"));
+response.sendFile(path.join(publicDirectory, "index.html"));
+});
+
+app.get("/history", (request, response) => {
+response.type("html").send(renderHistoryPage(getSubmissions()));
+});
+
+app.get("/api/contacts", (request, response) => {
+response.json({ submissions: getSubmissions() });
 });
 
 app.post("/contact", (request, response) => {
-  const { values, errors } = validateContactForm(request.body);
-  if (Object.keys(errors).length > 0) {
-    response.status(400).send(renderResult({ values, errors }));
-    return;
-  }
+const { values, errors } = validateContactForm(request.body);
+const consentGiven = request.body?.consent === "on";
+if (!consentGiven) {
+  errors.consent = "Confirm that you are using sample data and understand submissions are publicly visible.";
+}
+if (Object.keys(errors).length > 0) {
+  response.status(400).send(renderResult({ values, errors, consentGiven }));
+  return;
+}
 
-  response.status(200).send(renderResult({ values, success: true }));
+addSubmission(values);
+response.status(200).send(renderResult({ values, success: true, consentGiven }));
 });
 
 app.use((request, response) => {

@@ -30,6 +30,7 @@ describe("Contact Us form routes and validation", () => {
         email: "alex@example.com",
         phone: "1234567890",
         message: "I would like to know more.",
+        consent: "on",
         ...overrides
       })
     });
@@ -42,6 +43,7 @@ describe("Contact Us form routes and validation", () => {
     assert.equal(response.status, 200);
     assert.match(html, /Contact Us/);
     assert.match(html, /action="\/contact" method="post"/);
+    assert.match(html, /public history page/);
     const stylesheetResponse = await fetch(`${baseUrl}/style.css`);
     assert.equal(stylesheetResponse.status, 200);
     assert.match(stylesheetResponse.headers.get("content-type"), /text\/css/);
@@ -52,7 +54,26 @@ describe("Contact Us form routes and validation", () => {
     const { response, html } = await submit();
     assert.equal(response.status, 200);
     assert.match(html, /submitted successfully/);
-    assert.match(html, /Return to the contact form/);
+    assert.match(html, /View saved submissions/);
+  });
+
+  it("GET /api/contacts returns valid submissions as JSON and GET /history displays them", async () => {
+    const apiResponse = await fetch(`${baseUrl}/api/contacts`);
+    assert.equal(apiResponse.status, 200);
+    assert.match(apiResponse.headers.get("content-type"), /application\/json/);
+    const { submissions } = await apiResponse.json();
+    assert.ok(submissions.length >= 1);
+    assert.equal(submissions[0].name, "Alex Morgan");
+    assert.equal(submissions[0].email, "alex@example.com");
+    assert.equal(submissions[0].phone, "1234567890");
+    assert.equal(submissions[0].message, "I would like to know more.");
+
+    const historyResponse = await fetch(`${baseUrl}/history`);
+    const html = await historyResponse.text();
+    assert.equal(historyResponse.status, 200);
+    assert.match(html, /Submission history/);
+    assert.match(html, /Alex Morgan/);
+    assert.match(html, /alex@example\.com/);
   });
 
   it("rejects empty required fields with HTTP 400", async () => {
@@ -106,5 +127,37 @@ describe("Contact Us form routes and validation", () => {
     assert.equal(response.status, 400);
     assert.match(html, /value="&lt;script&gt;"/);
     assert.doesNotMatch(html, /value="<script>"/);
+  });
+
+  it("requires public-history consent and does not save without it", async () => {
+    const beforeResponse = await fetch(`${baseUrl}/api/contacts`);
+    const before = (await beforeResponse.json()).submissions.length;
+    const { response, html } = await submit({ consent: "" });
+    assert.equal(response.status, 400);
+    assert.match(html, /Confirm that you are using sample data/);
+    const afterResponse = await fetch(`${baseUrl}/api/contacts`);
+    const after = (await afterResponse.json()).submissions.length;
+    assert.equal(after, before);
+  });
+
+  it("does not store invalid submissions", async () => {
+    const beforeResponse = await fetch(`${baseUrl}/api/contacts`);
+    const before = (await beforeResponse.json()).submissions.length;
+    const { response } = await submit({ email: "invalid-email" });
+    assert.equal(response.status, 400);
+    const afterResponse = await fetch(`${baseUrl}/api/contacts`);
+    const after = (await afterResponse.json()).submissions.length;
+    assert.equal(after, before);
+  });
+
+  it("escapes saved messages when displaying public history", async () => {
+    const message = "<script>alert(1)</script>";
+    const { response } = await submit({ message });
+    assert.equal(response.status, 200);
+
+    const historyResponse = await fetch(`${baseUrl}/history`);
+    const html = await historyResponse.text();
+    assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+    assert.doesNotMatch(html, /<script>alert\(1\)<\/script>/);
   });
 });

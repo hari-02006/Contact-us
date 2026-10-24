@@ -9,13 +9,14 @@
 </head>
 <body>
   <main class="page">
-    <header class="topbar"><a class="brand" href="/">KINSHIP<span>.</span></a><span class="topbar-note">HERE WHEN YOU NEED US</span></header>
+    <header class="topbar"><a class="brand" href="/">KINSHIP<span>.</span></a><div class="topbar-actions"><span class="topbar-note">HERE WHEN YOU NEED US</span><a class="history-link" href="/history">Submission history <span aria-hidden="true">↗</span></a></div></header>
     <section class="contact-layout" aria-labelledby="page-title">
       <div class="side-copy">
         <p class="eyebrow">LET'S START A CONVERSATION</p>
         <h1 id="page-title">Good things<br>start with<br><span>a hello.</span></h1>
         <p class="side-intro">Questions, ideas, or just want to say hi? Send us a note and our team will be glad to hear from you.</p>
         <div class="contact-note"><span class="note-icon" aria-hidden="true">↗</span><span>We typically reply within<br><strong>one business day.</strong></span></div>
+        <p class="demo-warning"><strong>Classroom demo:</strong> submissions appear on the public history page. Use sample data only. Entries are cleared when the server restarts.</p>
       </div>
       <div class="form-card">
         <div class="form-heading">
@@ -41,10 +42,15 @@
           <div class="field">
             <label for="message">Message<span aria-hidden="true"> *</span></label>
             <textarea id="message" name="message" rows="5" placeholder="How can we help?" required></textarea>
+            <p class="hint">10–500 characters.</p>
+          </div>
+          <div class="consent-field">
+            <input id="consent" name="consent" type="checkbox" value="on" required>
+            <label for="consent">I understand this demo displays my submission on its public history page. I am using sample data only.</label>
           </div>
           <button class="button" type="submit">Send message <span aria-hidden="true">→</span></button>
         </form>
-        <p class="privacy-note"><span aria-hidden="true">◇</span> Your details are only used to respond to your message.</p>
+        <p class="privacy-note"><span aria-hidden="true">◇</span> This demo stores entries in server memory only; they are not kept after restart.</p>
       </div>
     </section>
     <footer class="footer"><span>MADE FOR MEANINGFUL CONVERSATIONS</span><span>CONTACT / 01</span></footer>
