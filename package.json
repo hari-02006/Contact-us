@@ -1,0 +1,17 @@
+{
+  "name": "student-contact-form",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A beginner-friendly Express contact form with server-side validation",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
